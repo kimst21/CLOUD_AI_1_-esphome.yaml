@@ -1,0 +1,129 @@
+substitutions:
+  name: ai-1                            # mDNS 호스트명 (영문소문자+하이픈만)
+  friendly_name: AI-1                   # HA 대시보드 표시 이름
+
+esphome:
+  name: ${name}                         # substitutions 변수 참조
+  friendly_name: ${friendly_name}       # HA UI 표시 이름
+
+esp32:
+  board: esp32-s3-devkitc-1             # ESP32-S3 공식 개발보드
+  framework:
+    type: esp-idf                       # Espressif 공식 SDK (2026.1부터 S3 기본)
+
+psram:
+  mode: quad                            # 4비트 병렬 통신 (8MB PSRAM)
+  speed: 80MHz                          # PSRAM 클럭 (음성 버퍼에 필수)
+
+logger:                                 # 기본 DEBUG (운영 시 level: WARN 추가)
+
+api:
+  encryption:
+    key: "0vZmVmUj7SL/B+OJyZvW+2/bLilbdP/deFdBcMNbAbM="  # HA 암호화 통신 키
+  reboot_timeout: 0s                    # HA 연결 끊겨도 재부팅 안 함 (기본 15min)
+
+ota:
+  platform: esphome                     # WiFi 무선 펌웨어 업데이트
+
+wifi:
+  networks:
+    - ssid: !secret wifi_ssid           # secrets.yaml에서 SSID 참조
+      password: !secret wifi_password   # secrets.yaml에서 비밀번호 참조
+  ap:                                   # WiFi 실패 시 폴백 AP 모드
+      password: "12345678"              # AP 접속 비밀번호
+  reboot_timeout: 0s                    # WiFi 끊겨도 재부팅 안 함
+  power_save_mode: none                 # 절전 OFF (음성 스트리밍 안정성)
+  fast_connect: true                    # SSID 스캔 생략 (빠른 부팅)
+
+i2c:                                    # I2C 버스 (이후 단계에서 센서 연결용)
+  sda: GPIO8                            # I2C 데이터 핀
+  scl: GPIO9                            # I2C 클럭 핀
+  scan: true                            # 부팅 시 연결된 I2C 장치 검색
+  frequency: 100kHz                     # Standard Mode
+
+i2s_audio:                              # I2S 오디오 버스 (마이크/스피커 분리 필수)
+  - id: bus_in                          # 마이크 입력 전용 버스
+    i2s_lrclk_pin: GPIO41              # 마이크 L/R 클럭
+    i2s_bclk_pin: GPIO42               # 마이크 비트 클럭
+  - id: bus_out                         # 스피커 출력 전용 버스
+    i2s_lrclk_pin: GPIO6               # 스피커 L/R 클럭
+    i2s_bclk_pin: GPIO16               # 스피커 비트 클럭
+
+microphone:                             # INMP441 I2S MEMS 디지털 마이크
+  - platform: i2s_audio
+    id: mic_inmp441                     # 마이크 ID (voice_assistant에서 참조)
+    i2s_audio_id: bus_in                # 입력 전용 버스 사용
+    i2s_din_pin: GPIO38                 # 마이크 데이터 핀 (SD/DOUT)
+    adc_type: external                  # 외부 ADC (INMP441 자체 변환)
+    sample_rate: 16000                  # 16kHz (Whisper 입력 규격)
+    bits_per_sample: 16bit              # 16비트 해상도
+    channel: left                       # L/R핀→GND이면 left (VCC이면 right)
+    pdm: false                          # I2S 모드 (PDM 아님)
+
+speaker:                                # MAX98357 I2S Class D 앰프
+  - platform: i2s_audio
+    id: speaker_out                     # 스피커 ID (media_player에서 참조)
+    i2s_audio_id: bus_out               # 출력 전용 버스 사용
+    i2s_dout_pin: GPIO14                # 스피커 데이터 핀 (DIN)
+    dac_type: external                  # 외부 DAC (MAX98357 자체 변환)
+    channel: mono                       # 모노 출력
+
+media_player:                           # speaker를 감싸는 미디어플레이어 (필수!)
+  - platform: speaker                   # speaker 기반 미디어플레이어
+    id: media_out                       # media_player ID (voice_assistant에서 참조)
+    name: "VA Media Player"             # HA 엔티티명 (볼륨 슬라이더 제공)
+    announcement_pipeline:              # TTS 재생 전용 파이프라인
+      speaker: speaker_out              # 실제 출력할 스피커
+      num_channels: 1                   # 모노 (TTS는 모노)
+      sample_rate: 16000                # 16kHz (TTS 출력 규격)
+      format: FLAC                      # 무손실 압축 (HA TTS 기본)
+
+voice_assistant:                        # HA Assist 파이프라인 연동 핵심
+  id: va                                # Voice Assistant ID
+  microphone: mic_inmp441               # 입력: INMP441 마이크
+  media_player: media_out               # 출력: media_player (speaker 아님!)
+  use_wake_word: false                  # Wake Word 안 씀 (버튼으로 시작)
+  noise_suppression_level: 2            # 배경 노이즈 억제 (0~4, 2 권장)
+  auto_gain: 31dBFS                     # 마이크 자동 이득 최대값
+  volume_multiplier: 1.5                # 볼륨 배율 (2.0 이상 왜곡 주의)
+  # on_tts_end: voice_assistant.stop    # 절대 사용 금지! 재생 전 중단됨
+
+output:
+  - platform: ledc                      # ESP32 하드웨어 PWM
+    pin: GPIO48                         # 부저 핀
+    id: buzzer_out                      # 부저 출력 ID
+  - platform: gpio                      # GPIO 디지털 출력
+    id: led_gpio4                       # LED 출력 ID
+    pin: GPIO4                          # 상태 LED 핀
+
+rtttl:                                  # Nokia 벨소리 형식 멜로디 플레이어
+  output: buzzer_out                    # PWM 출력 연결
+  id: buzzer                            # RTTTL 플레이어 ID
+binary_sensor:
+  - platform: gpio                      # 음성 시작 버튼
+    pin:
+      number: GPIO7                     # 시작 버튼 핀
+      mode: INPUT_PULLUP                # 내부 풀업 (버튼→GND 연결)
+      inverted: true                    # LOW=ON (눌림)
+    name: "VA Start Button"             # HA 엔티티명
+    filters:
+      - delayed_on: 50ms               # 50ms 디바운싱 (채터링 방지)
+    on_press:                           # 버튼 눌렀을 때
+      - rtttl.play: "beep:d=8,o=6,b=120:c"   # 짧은 삐 소리 (시작 피드백)
+      - voice_assistant.start           # 음성 어시스턴트 시작
+
+  - platform: gpio                      # 음성 정지 버튼
+    pin:
+      number: GPIO15                    # 정지 버튼 핀
+      mode: INPUT_PULLUP                # 내부 풀업
+      inverted: true                    # LOW=ON
+    name: "VA Stop Button"             # HA 엔티티명
+    filters:
+      - delayed_on: 50ms               # 50ms 디바운싱
+    on_press:
+      - voice_assistant.stop            # 음성 어시스턴트 강제 중지
+
+light:
+  - platform: binary                    # ON/OFF만 가능한 단색 LED
+    name: "Status LED"                  # HA 엔티티명
+    output: led_gpio4                   # GPIO4 출력 연결
