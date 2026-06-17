@@ -12,7 +12,7 @@ esp32:
     type: esp-idf                       # Espressif 공식 SDK (2026.1부터 S3 기본)
 
 psram:
-  mode: quad                            # 4비트 병렬 통신 (8MB PSRAM)
+  mode: octal                            # 4비트 병렬 통신 (8MB PSRAM)
   speed: 80MHz                          # PSRAM 클럭 (음성 버퍼에 필수)
 
 logger:                                 # 기본 DEBUG (운영 시 level: WARN 추가)
