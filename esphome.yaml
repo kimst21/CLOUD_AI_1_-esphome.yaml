@@ -90,7 +90,7 @@ voice_assistant:                        # HA Assist 파이프라인 연동 핵�
 
 output:
   - platform: ledc                      # ESP32 하드웨어 PWM
-    pin: GPIO48                         # 부저 핀
+    pin: GPIO40                         # 부저 핀
     id: buzzer_out                      # 부저 출력 ID
   - platform: gpio                      # GPIO 디지털 출력
     id: led_gpio4                       # LED 출력 ID
