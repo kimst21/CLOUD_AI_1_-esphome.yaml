@@ -46,7 +46,7 @@ i2s_audio:                              # I2S 오디오 버스 (마이크/스피
     i2s_lrclk_pin: GPIO41              # 마이크 L/R 클럭
     i2s_bclk_pin: GPIO42               # 마이크 비트 클럭
   - id: bus_out                         # 스피커 출력 전용 버스
-    i2s_lrclk_pin: GPIO6               # 스피커 L/R 클럭
+    i2s_lrclk_pin: GPIO39               # 스피커 L/R 클럭
     i2s_bclk_pin: GPIO16               # 스피커 비트 클럭
 
 microphone:                             # INMP441 I2S MEMS 디지털 마이크
